@@ -102,12 +102,15 @@ class Vcf_metadata(object):
     def __init__(self, filename):
         if filename.endswith('.gz'):
             self.compression = 'gzip'
-            if filename+'.tbi' in os.listdir(os.path.split(filename)[0]):
+            tbi_filename = filename.split('/')[-1]
+            #filename = filename.split('/')[-1]
+            if tbi_filename+'.tbi' in os.listdir(os.path.split(filename)[0]):
                 header_lines = os.popen('tabix -H ' + filename).readlines()
                 self.header = [l.replace('#CHROM','CHROM') for l in header_lines if l.startswith('#')]
-            os.system('tabix -p vcf ' + filename)
-            header_lines = os.popen('tabix -H ' + filename).readlines()
-            self.header = [l.replace('#CHROM','CHROM') for l in header_lines if l.startswith('#')]
+            else:
+                os.system('tabix -p vcf ' + filename)
+                header_lines = os.popen('tabix -H ' + filename).readlines()
+                self.header = [l.replace('#CHROM','CHROM') for l in header_lines if l.startswith('#')]
         
         else:
             self.compression = ''
@@ -178,6 +181,7 @@ class vcf_tabix(object):
         split_cols
         
         '''
+        
         genotypes = self.df[self.samples].groupby(by=self.FORMAT)  #genotypes grouped by FORMAT variant annotations
         
         #Iterate through genotype groups, dropping missing calls
@@ -185,7 +189,7 @@ class vcf_tabix(object):
         for name,group in genotypes:
             temp_group = genotypes.get_group(name)  #group of interest
             del temp_group['FORMAT']  #remove the format column
-            temp_group.replace(to_replace='.', value=nan, inplace=True)  #replace . with none, allows stack to remove null columns, space savings
+            temp_group.replace(to_replace='.', value='', inplace=True)  #replace . with none, allows stack to remove null columns, space savings
             
             temp_group = temp_group.stack()  #stacking samples for each variant
         
@@ -193,7 +197,7 @@ class vcf_tabix(object):
             temp_group_data = pd.DataFrame(temp_group.str.split(':').tolist())
             temp_group_data.index = temp_group.index
             temp_group_data.columns = name.split(':')
-            temp_group_data.replace(to_replace='.', value=nan, inplace=True)
+            temp_group_data.replace(to_replace='.', value='', inplace=True)
             
             master_df.append(temp_group_data)
         
@@ -348,6 +352,8 @@ def get_fi_score(chrom, start, end, score_id1, score_id2):
 
 
 
+
+
 def get_gene_df(gene_id):
 
     print gene_id
@@ -480,14 +486,15 @@ def get_gene_df(gene_id):
         gene_df['a1_a2_score_sum'] = gene_df.pos_a1 + gene_df.pos_a2
         
         array_gene_df = arrayify(gene_df , gene_id)
-        array_gene_df.to_csv('/Users/erickscott/datasets_raw/snyderome/fiSSEA.txt',sep="\t",mode='a', header=False)
+        array_gene_df.to_csv('/Users/erickscott/datasets_raw/snyderome/fiSSEA_parallel.txt',sep="\t",mode='a', header=False)
         return 1
     return 0
+    
     
 
 # <codecell>
 
-# vcf_path = '/Users/erickscott/datasets_raw/snyderome/TB0001907.all.ILLUMNIA.bwa.CEU.high_coverage.20101118.snp.raw.filtered.vcf.gz'
+vcf_path = '/Users/erickscott/datasets_raw/snyderome/TB0001907.all.ILLUMNIA.bwa.CEU.high_coverage.20101118.snp.raw.filtered.vcf.gz'
 
 # g_df = get_gene_df(entrez_genes[903])
 
@@ -505,7 +512,7 @@ def get_gene_df(gene_id):
 # <codecell>
 
 entrez_genes = sys.argv[1]  #list of gene_ids to run
-entrez_genes = map(int, entrez_genes.split('\t'))
+entrez_genes = map(int, entrez_genes.split('_'))
 
 gene_counter = 0
 #for g in gene_ids_df['_id']:
