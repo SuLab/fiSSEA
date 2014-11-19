@@ -5,6 +5,7 @@ from __future__ import print_function
 import sys
 import time
 import httplib2
+import requests
 import json
 try:
     from pandas import DataFrame
@@ -113,19 +114,24 @@ class MyVariantInfo():
             return json.loads(con)
 
     def _post(self, url, params):
-        debug = params.pop('debug', False)
+        #debug = params.pop('debug', False)
         return_raw = params.pop('return_raw', False)
         headers = {'content-type': 'application/x-www-form-urlencoded',
-                   'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % httplib2.__version__}
-        res, con = self.h.request(url, 'POST', body=urlencode(params), headers=headers)
-        con = con.decode("utf8")  # required in python3
-        if debug:
-            return url, res, con
-        assert res.status == 200, (url, res, con)
+                   'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % requests.__version__}
+        res = requests.post(url, params=params, headers=headers)
+        #res, con = self.h.request(url, 'POST', body=urlencode(params), headers=headers)
+        #con = con.decode("utf8")  # required in python3
+        #if debug:
+        #    return url, res, con
+        #assert res.status == 200, (url, res, con)
+        assert res.status_code == 200
         if return_raw:
-            return con
+            return res
         else:
-            return json.loads(con)
+            return res.json()
+            
+        #vars = json.loads(mv.getvariants(["chr1:g.35367C>T", "chr7:g.55241707G>T"], return_raw=True))    
+        
 
     def _is_entrez_id(self, id):
         try:
@@ -215,7 +221,7 @@ class MyVariantInfo():
         _url = self.url + '/variant'
         return self._post(_url, _kwargs)
 
-    def getvariants(self, geneids, fields='symbol,name,taxid,entrezgene', **kwargs):
+    def getvariants(self, geneids, **kwargs): #fields='symbol,name,taxid,entrezgene',
         '''Return the list of gene objects for the given list of geneids.
         This is a wrapper for POST query of "/gene" service.
 
@@ -252,10 +258,10 @@ class MyVariantInfo():
             geneids = geneids.split(',')
         if (not (isinstance(geneids, (list, tuple)) and len(geneids) > 0)):
             raise ValueError('input "geneids" must be non-empty list or tuple.')
-        if fields:
-            kwargs['fields'] = self._format_list(fields)
-        if 'filter' in kwargs:
-            kwargs['fields'] = self._format_list(kwargs['filter'])
+        #if fields:
+        #    kwargs['fields'] = self._format_list(fields)
+        #if 'filter' in kwargs:
+        #    kwargs['fields'] = self._format_list(kwargs['filter'])
         verbose = kwargs.pop('verbose', True)
         as_dataframe = kwargs.pop('as_dataframe', False)
         if as_dataframe:
