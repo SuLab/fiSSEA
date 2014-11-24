@@ -338,7 +338,10 @@ class fiSSEA(object):
 
     
     def open_GSEA_html(self):
-        #Opening GSEA HTML Results Report
+        '''
+        Polls the user-specified output directory for the last written
+        file and opens the index.html file in that directory
+        '''
         os.system('open ' + self.output_dir_path + self.last_written_dir + '/index.html')
         return 0
 
