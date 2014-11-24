@@ -13,6 +13,7 @@ import json, httplib2
 import pandas as pd
 from pandas.io.json import json_normalize
 import numpy as np
+import cPickle, subprocess
 
 #fiSSEA Libraries
 sys.path.append('../pandasVCF/src/single_sample/')
@@ -177,6 +178,9 @@ class fiSSEA(object):
         #get myvariant.info annotations, create fiSSEA dataframe
         self.fiSSEA_status = self.get_fi_scores()
         
+        #setting sample_id
+        self.sample_id = sample_id
+        
 
     
     def get_multigene_var_records(self, df_line):
@@ -236,7 +240,107 @@ class fiSSEA(object):
         return 0
 
 
+    def write_rnk_file(self):
+            '''
+            Writes functional impact scores to .rnk file in
+            the fiSSEA/gsea/rnk/ directory.
+    
+            Returns path to rnk file
+            '''
+    
+            fiSSEA_results_write = self.fi_scores.copy()
+            fiSSEA_results_write.name = '#' + fiSSEA_results_write.name 
+    
+    
+            rnk_path = self.rnk_write_dir + self.sample_id + self.fi_scores.name +'.rnk'
+            self.rnk_path = rnk_path
+            
+            if not os.path.exists(self.rnk_write_dir):
+                    os.makedirs(self.rnk_write_dir)
+            
+            fiSSEA_results_write.to_csv(self.rnk_path, sep='\t')
+            return True
+        
+        
+        
+    def call_preranked_gsea(self):
+        '''
+        Calls GSEA PreRanked Analysis using several default parameters
+        '''
+    
+        gsea_cmd = ['java', '-cp', self.gsea_jar_path, '-Xmx512m', 'xtools.gsea.GseaPreranked', \
+                '-gmx', self.tissue_geneset_path, '-collapse false', '-mode Max_probe', \
+                 '-nperm 1000', '-rnk', self.rnk_path, '-scoring_scheme classic', \
+                '-rpt_label my_analysis', '-include_only_symbols true', \
+                '-rpt_label', self.sample_id,  '-chip gseaftp.broadinstitute.org://pub/gsea/annotations/GENE_SYMBOL.chip', \
+                '-include_only_symbols true', '-make_sets true', '-plot_top_x 20', \
+                '-rnd_seed timestamp', '-set_max 15000', '-set_min 15', '-zip_report false', \
+                '-out', self.output_dir_path, '-gui false']
+    
+    
+        p = subprocess.Popen(gsea_cmd,
+                         stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT)
+    
+        run_stdout = [">>> " + line.rstrip() for line in iter(p.stdout.readline, b'')]
+        return run_stdout
+    
+    
+    
+    def run_GSEA_preranked(self, gsea_jar_path, tissue_geneset_path, output_dir_path):
+        '''
+        Calls GSEA jar for a PreRanked analysis.
+        
+        Parameters
+        -------------
+        gsea_jar_path: str, required
+            Specifies the path to GSEA jar, e.g. /Users/bin/gsea/gsea2-2.1.0.jar
+                Can be downloaded from http://www.broadinstitute.org/gsea/downloads.jsp
+                
+        rnk_write_dir: str, required
+            Specifies the directory path where the rnk file should be written
+                e.g. /Users/data/gsea/rnk/
+        
+        tissue_geneset_path: str, required
+            Specifies the path to the tissue genesets (.gmt format)
+                e.g.  /Users/data/gsea/genesets/EnrichmentValues_Primary_U133A_ave_percent_over70percent_no_brain.gmt
+        
+        output_dir_path: str, required
+            Specifies the directory path where the GSEA output should be written
+                e.g. /Users/data/gsea/results/
+        
+        Returns
+        -------------
+        
+        '''
+        
+        #Setting GSEA parameter paths
+        self.gsea_jar_path = gsea_jar_path
+        self.rnk_write_dir = output_dir_path
+        self.tissue_geneset_path = tissue_geneset_path
+        self.output_dir_path = output_dir_path
+        
+        #Writing the rnk file to disk
+        self.write_rnk_file()
+        
+        #Run PreRanked Gene Set Enrichment Analysis, please see run_preranked_gsea function to change
+        #parameters
+        #Returns 0 if successful run
+        run_stdout = self.call_preranked_gsea()
+        self.run_stdout = run_stdout
 
+        
+        last_written_dir = os.popen('ls -lht ' + self.output_dir_path).readlines()
+        last_written_dir = last_written_dir[1].split()[-1]
+        self.last_written_dir = last_written_dir  #likely the path to the output files
+        
+        return 0
+
+    
+    def open_GSEA_html(self):
+        #Opening GSEA HTML Results Report
+        os.system('open ' + self.output_dir_path + self.last_written_dir + '/index.html')
+        return 0
 
 
 
@@ -244,20 +348,23 @@ class fiSSEA(object):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-i','--vcf_input', type=str,help='Specifies the input coding snp vcf file, /path/to/cds.vcf')
-parser.add_argument('-o','--output_path', type=str,help='Specifies the output file path, e.g. /path/to/output/counts_df.txt')
-
+parser.add_argument('-o','--output_path', type=str,help='Specifies the output file path, e.g. /path/to/output/')
 parser.add_argument('-s','--sample_id', type=str,help='Specifies the sample identifier in the vcf file, e.g. NA12878')
 parser.add_argument('-c','--chunk', type=str,help='Specifies the chunksize for vcf iteration') 
 parser.add_argument('-f','--fi_score', type=str,help='Specifies the name of the functional impact score, e.g. dbnsfp.cadd.phred') 
 parser.add_argument('-g','--gene_stat', type=str,help='Specifies the gene statistic, e.g. np.mean')
 
+parser.add_argument('-G','--gsea_jar', type=str,help='Specifies the path to the gsea jar, e.g. /path/to/gsea/gsea2-2.1.0.jar')
+parser.add_argument('-T','--tissue_geneset', type=str,help='Specifies the path to the tissue geneset, e.g. /path/to/gsea/geneset/tissue.gmt')
+parser.add_argument('-P','--pickle_path', type=str,help='Specifies the path to write pkl fiSSEA object, e.g. /path/to/pkl/sample_id.pkl')
 
 opts = parser.parse_known_args()
 vcf_path, output_path, sample_id = opts[0].vcf_input, opts[0].output_path, opts[0].sample_id 
 fi_score, gene_statistic, chunk = opts[0].fi_score, opts[0].gene_stat, opts[0].chunk
-
+gsea_jar_path, tissue_geneset_path, pkl_path = opts[0].gsea_jar, opts[0].tissue_geneset, opts[0].pickle_path
 
 mv = myvariant.MyVariantInfo()
+
 
 
 if __name__ == '__main__':
@@ -276,12 +383,16 @@ if __name__ == '__main__':
 
     fiSSEA_results = fiSSEA(vcf_path, sample_id=sample_id, chunksize=chunk, fiSSEA_score=fi_score, gene_stat=gene_statistic)
     
+    fiSSEA_results.run_GSEA_preranked(gsea_jar_path, tissue_geneset_path, output_path)
     
-    if not output_path:
-        fiSSEA_results.fi_scores.to_csv(sys.stdout)
+
+    
+    if not pkl_path:
+        pass
     else:
-        fiSSEA_results.fi_scores.to_csv(output_path, sep='\t')
+        cPickle.dump(fiSSEA_results, open(pkl_path, 'wb'))
     
     
+
 
     
