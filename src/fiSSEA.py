@@ -391,8 +391,11 @@ if __name__ == '__main__':
         pass
     else:
         cPickle.dump(fiSSEA_results, open(pkl_path, 'wb'))
-    
-    
+
+
+#EXAMPLE COMMAND
+#python fiSSEA.py -i ~/git/fiSSEA/data/snyderome_chr6_cds.vcf.gz -o ~/Desktop/output/ -s TB0001907 -G ~/git/fiSSEA/gsea/gsea2-2.1.0.jar -T ~/git/fiSSEA/gsea/genesets/EnrichmentValues_Primary_U133A_ave_percent_over70percent_no_brain.gmt -P ~/Desktop/output/testing.pkl
+ 
 
 
     
