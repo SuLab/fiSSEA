@@ -70,7 +70,7 @@ def myvariant_post(hgvs_list):
     headers = {'content-type': 'application/x-www-form-urlencoded'}
     params = 'ids=' + hgvs_list +",size=1000"  #can pass a dictionary
     #print params
-    res, con = h.request('http://myvariant.info:8001/api/variant/', 'POST', params, headers=headers)
+    res, con = h.request('http://myvariant.info/api/variant/', 'POST', params, headers=headers)
     
     
     mv_df = normalize(con)
