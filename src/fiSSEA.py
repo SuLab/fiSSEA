@@ -45,36 +45,18 @@ def myvariant_post(hgvs_list):
         normalized json of myvariant results
     '''
     
-    def normalize(con):
-        '''
-        This function uses the json.loads and json_normalize
-        modules to flatten the myvariant.info results
-        '''
-        temp_df = json_normalize(json.loads(con), 'docs')
-        source_parsed = []
-        for source_json in temp_df['_source'].values:
-            try:
-                source_parsed.append(json_normalize(source_json))
-            except TypeError:  #occurs with empty results
-                pass
-        return pd.concat(source_parsed)
-    
-    
+
     
     if type(hgvs_list) == list:
         hgvs_list = ','.join(hgvs_list)
         
     assert type(hgvs_list) == str
     
-    h = httplib2.Http()
-    headers = {'content-type': 'application/x-www-form-urlencoded'}
-    params = 'ids=' + hgvs_list +",size=1000"  #can pass a dictionary
-    #print params
-    res, con = h.request('http://myvariant.info/api/variant/', 'POST', params, headers=headers)
-    
-    
-    mv_df = normalize(con)
+    con = mv.getvariants(hgvs_list, fields='dbnsfp.cadd.phred,dbnsfp.genename')    
+
+    mv_df = json_normalize(con)
     mv_df.index = mv_df['_id']
+    
 
     return mv_df
     
@@ -102,16 +84,7 @@ def get_myvariant_snp_annot(vcf_df_mv):
     
     '''
     
-    def chunks(l, n):
-        """ 
-        Yield successive n-sized chunks from l.
-        """
-        l = list(l)
-        chunk_list = []
-        for i in xrange(0, len(l), n):
-            chunk_list.append( l[i:i+n] )
-        return chunk_list
-    
+
     
  
     if 'CHROM' not in vcf_df_mv.columns:
@@ -131,9 +104,7 @@ def get_myvariant_snp_annot(vcf_df_mv):
 
     hgvs_ids = set(hgvs_a1.values) | set(hgvs_a2.values)  #set of non-reference a1 and a2 snps
 
-    hgvs_ids_chunks = chunks(hgvs_ids, 1000)  #batch queries of hgvs a1 and a2 variants, n=1000
-
-    myvariant_results = map(myvariant_post, hgvs_ids_chunks)
+    myvariant_results = map(myvariant_post, hgvs_ids)
         
     return myvariant_results
     

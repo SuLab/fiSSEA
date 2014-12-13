@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 '''
-Python Client for MyGene.Info services
+Python Client for MyVariant.Info services
 '''
 from __future__ import print_function
 import sys
@@ -23,25 +24,6 @@ else:
     from urllib import urlencode
 
 
-def alwayslist(value):
-    '''If input value if not a list/tuple type, return it as a single value list.
-
-    Example:
-
-    >>> x = 'abc'
-    >>> for xx in alwayslist(x):
-    ...     print xx
-    >>> x = ['abc', 'def']
-    >>> for xx in alwayslist(x):
-    ...     print xx
-
-    '''
-    if isinstance(value, (list, tuple)):
-        return value
-    else:
-        return [value]
-
-
 def safe_str(s, encoding='utf-8'):
     '''if input is an unicode string, do proper encoding.'''
     try:
@@ -51,25 +33,14 @@ def safe_str(s, encoding='utf-8'):
     return _s
 
 
-def list_itemcnt(list):
-    '''Return number of occurrence for each type of item in the list.'''
-    x = {}
-    for item in list:
-        if item in x:
-            x[item] += 1
-        else:
-            x[item] = 1
-    return [(i, x[i]) for i in x]
-
-
 class MyVariantInfo():
-    '''This is the client for MyGene.info web services.
+    '''This is the client for MyVariant.info web services.
     Example:
 
-        >>> mg = MyGeneInfo()
+        >>> mv = MyVariantInfo()
 
     '''
-    def __init__(self, url='http://myvariant.info/api'):
+    def __init__(self, url='http://myvariant.info/v1'):
         self.url = url
         if self.url[-1] == '/':
             self.url = self.url[:-1]
@@ -79,7 +50,7 @@ class MyVariantInfo():
         self.delay = 1
         self.step = 1000
 
-    def _as_dataframe(self, gene_obj, df_index=True):
+    def _as_dataframe(self, gene_obj, df_index=False):
         """
         converts gene object to DataFrame (pandas)
         """
@@ -92,53 +63,36 @@ class MyVariantInfo():
         else:
             df = DataFrame.from_dict(gene_obj)
         if df_index:
-            df = df.set_index('query')
+            df = df.set_index('_id')
         return df
 
     def _get(self, url, params={}):
         debug = params.pop('debug', False)
         return_raw = params.pop('return_raw', False)
         headers = {'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % httplib2.__version__}
-        if params:
-            _url = url + '?' + urlencode(params)
-        else:
-            _url = url
-        res, con = self.h.request(_url, headers=headers)
-        con = con.decode("utf8")  # required in python3
-        if debug:
-            return _url, res, con
-        assert res.status == 200, (_url, res, con)
-        if return_raw:
-            return con
-        else:
-            return json.loads(con)
-
-    def _post(self, url, params):
-        #debug = params.pop('debug', False)
-        return_raw = params.pop('return_raw', False)
-        headers = {'content-type': 'application/x-www-form-urlencoded',
-                   'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % requests.__version__}
-        res = requests.post(url, params=params, headers=headers)
-        #res, con = self.h.request(url, 'POST', body=urlencode(params), headers=headers)
-        #con = con.decode("utf8")  # required in python3
+        res = requests.get(url, params=params, headers=headers)
         #if debug:
-        #    return url, res, con
-        #assert res.status == 200, (url, res, con)
+        #    return _url, res, con
         assert res.status_code == 200
         if return_raw:
             return res
         else:
             return res.json()
-            
-        #vars = json.loads(mv.getvariants(["chr1:g.35367C>T", "chr7:g.55241707G>T"], return_raw=True))    
-        
 
-    def _is_entrez_id(self, id):
-        try:
-            int(id)
-            return True
-        except:
-            return False
+    def _post(self, url, params):
+#        #if debug:
+#        #    return url, res, con
+        debug = params.pop('debug', False)
+        return_raw = params.pop('return_raw', False)
+        headers = {'content-type': 'application/x-www-form-urlencoded',
+                   'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % httplib2.__version__}
+        res = requests.post(url, data=params, headers=headers)
+        assert res.status_code == 200
+        if return_raw:
+            return res
+        else:
+            return res.json()
+
 
     def _format_list(self, a_list, sep=','):
         if isinstance(a_list, (list, tuple)):
@@ -167,17 +121,17 @@ class MyVariantInfo():
 
     @property
     def metadata(self):
-        '''Return a dictionary of MyGene.info metadata.
+        '''Return a dictionary of MyVariant.info metadata.
 
         Example:
 
-        >>> metadata = mg.metadata
+        >>> metadata = mv.metadata
 
         '''
         _url = self.url+'/metadata'
         return self._get(_url)
 
-    def getgene(self, geneid, fields='symbol,name,taxid,entrezgene', **kwargs):
+    def getvariant(self, geneid, **kwargs):
         '''Return the gene object for the give geneid.
         This is a wrapper for GET query of "/gene/<geneid>" service.
 
@@ -197,31 +151,31 @@ class MyVariantInfo():
 
         Example:
 
-        >>> mg.getgene(1017, email='abc@example.com')
-        >>> mg.getgene('1017', fields='symbol,name,entrezgene,refseq')
-        >>> mg.getgene('1017', fields='symbol,name,entrezgene,refseq.rna')
-        >>> mg.getgene('1017', fields=['symbol', 'name', 'pathway.kegg'])
-        >>> mg.getgene('ENSG00000123374', fields='all')
+        >>> mv.getvariant(1017, email='abc@example.com')
+        >>> mv.getvariant('1017', fields='symbol,name,entrezgene,refseq')
+        >>> mv.getvariant('1017', fields='symbol,name,entrezgene,refseq.rna')
+        >>> mv.getvariant('1017', fields=['symbol', 'name', 'pathway.kegg'])
+        >>> mv.getvariant('ENSG00000123374', fields='all')
 
         .. Hint:: The supported field names passed to **fields** parameter can be found from
                   any full gene object (when **fields="all"**). Note that field name supports dot
                   notation for nested data structure as well, e.g. you can pass "refseq.rna" or
                   "pathway.kegg".
         '''
-        if fields:
-            kwargs['fields'] = self._format_list(fields)
+        #if fields:
+        #    kwargs['fields'] = self._format_list(fields)
         if 'filter' in kwargs:
             kwargs['fields'] = self._format_list(kwargs['filter'])
-        _url = self.url + '/gene/' + str(geneid)
+        _url = self.url + '/variant/' + str(geneid)
         return self._get(_url, kwargs)
 
     def _getvariants_inner(self, geneids, **kwargs):
         _kwargs = {'ids': self._format_list(geneids)}
         _kwargs.update(kwargs)
-        _url = self.url + '/variant'
+        _url = self.url + '/variant/'
         return self._post(_url, _kwargs)
 
-    def getvariants(self, geneids, **kwargs): #fields='symbol,name,taxid,entrezgene',
+    def getvariants(self, ids, fields=None, **kwargs):
         '''Return the list of gene objects for the given list of geneids.
         This is a wrapper for POST query of "/gene" service.
 
@@ -247,21 +201,20 @@ class MyVariantInfo():
         >>> mg.getgenes([1017, '1018','ENSG00000148795'], fields="entrezgene,uniprot")
         >>> mg.getgenes([1017, '1018','ENSG00000148795'], fields="all")
         >>> mg.getgenes([1017, '1018','ENSG00000148795'], as_dataframe=True)
-
         .. Hint:: A large list of more than 1000 input ids will be sent to the backend
                   web service in batches (1000 at a time), and then the results will be
                   concatenated together. So, from the user-end, it's exactly the same as
                   passing a shorter list. You don't need to worry about saturating our
                   backend servers.
         '''
-        if isinstance(geneids, str_types):
-            geneids = geneids.split(',')
-        if (not (isinstance(geneids, (list, tuple)) and len(geneids) > 0)):
-            raise ValueError('input "geneids" must be non-empty list or tuple.')
-        #if fields:
-        #    kwargs['fields'] = self._format_list(fields)
-        #if 'filter' in kwargs:
-        #    kwargs['fields'] = self._format_list(kwargs['filter'])
+        if isinstance(ids, str_types):
+            ids = ids.split(',')
+        if (not (isinstance(ids, (list, tuple)) and len(ids) > 0)):
+            raise ValueError('input "variantids" must be non-empty list or tuple.')   
+        if fields:
+            kwargs['fields'] = self._format_list(fields)
+        if 'filter' in kwargs:
+            kwargs['fields'] = self._format_list(kwargs['filter'])
         verbose = kwargs.pop('verbose', True)
         as_dataframe = kwargs.pop('as_dataframe', False)
         if as_dataframe:
@@ -270,9 +223,9 @@ class MyVariantInfo():
         if return_raw:
             as_dataframe = False
 
-        query_fn = lambda geneids: self._getvariants_inner(geneids, **kwargs)
+        query_fn = lambda ids: self._getvariants_inner(ids, **kwargs)
         out = []
-        for hits in self._repeated_query(query_fn, geneids, verbose=verbose):
+        for hits in self._repeated_query(query_fn, ids, verbose=verbose):
             if return_raw:
                 out.append(hits)   # hits is the raw response text
             else:
@@ -332,7 +285,7 @@ class MyVariantInfo():
         _url = self.url + '/query'
         return self._post(_url, _kwargs)
 
-    def querymany(self, qterms, scopes=None, **kwargs):
+    def queryvariants(self, q, scopes=None, **kwargs):
         '''Return the batch query result.
         This is a wrapper for POST query of "/query" service.
 
@@ -374,9 +327,9 @@ class MyVariantInfo():
         .. Hint:: Just like :py:meth:`getgenes`, passing a large list of ids (>1000) to :py:meth:`querymany` is perfectly fine.
 
         '''
-        if isinstance(qterms, str_types):
-            qterms = qterms.split(',')
-        if (not (isinstance(qterms, (list, tuple)) and len(qterms) > 0)):
+        if isinstance(q, str_types):
+            qterms = q.split(',')
+        if (not (isinstance(qterms, (list, tuple)) and len(q) > 0)):
             raise ValueError('input "qterms" must be non-empty list or tuple.')
 
         if scopes:
@@ -386,8 +339,6 @@ class MyVariantInfo():
             kwargs['scopes'] = self._format_list(kwargs['scope'])
         if 'fields' in kwargs:
             kwargs['fields'] = self._format_list(kwargs['fields'])
-        if 'species' in kwargs:
-            kwargs['species'] = self._format_list(kwargs['species'])
         returnall = kwargs.pop('returnall', False)
         verbose = kwargs.pop('verbose', True)
         as_dataframe = kwargs.pop('as_dataframe', False)
@@ -401,8 +352,8 @@ class MyVariantInfo():
         li_missing = []
         li_dup = []
         li_query = []
-        query_fn = lambda qterms: self._querymany_inner(qterms, **kwargs)
-        for hits in self._repeated_query(query_fn, qterms, verbose=verbose):
+        query_fn = lambda qterms: self._querymany_inner(q, **kwargs)
+        for hits in self._repeated_query(query_fn, q, verbose=verbose):
             if return_raw:
                 out.append(hits)   # hits is the raw response text
             else:
@@ -423,9 +374,9 @@ class MyVariantInfo():
             out = self._as_dataframe(out, df_index)
 
         # check dup hits
-        if li_query:
-            li_dup = [(query, cnt) for query, cnt in list_itemcnt(li_query) if cnt > 1]
-        del li_query
+       # if li_query:
+       #     li_dup = [(query, cnt) for query, cnt in list_itemcnt(li_query) if cnt > 1]
+       # del li_query
 
         if verbose:
             if li_dup:
@@ -441,11 +392,4 @@ class MyVariantInfo():
                 print('Pass "returnall=True" to return complete lists of duplicate or missing query terms.')
             return out
 
-    def findgenes(self, id_li, **kwargs):
-        '''.. deprecated:: 2.0.0
-
-        Use :py:meth:`querymany` instead. It's kept here as an alias of :py:meth:`querymany` method.
-        '''
-        import warnings
-        warnings.warn('Deprecated! Currently an alias of "querymany" method. Use "querymany" method directly.', DeprecationWarning)
-        return self.querymany(id_li, **kwargs)
+mv=MyVariantInfo()
