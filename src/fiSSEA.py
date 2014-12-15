@@ -44,23 +44,30 @@ def myvariant_post(hgvs_list):
     pandas df:
         normalized json of myvariant results
     '''
-    
 
     
     if type(hgvs_list) == list:
-        hgvs_list = ','.join(hgvs_list)
+        hgvs_list = str(','.join(hgvs_list))
         
     assert type(hgvs_list) == str
     
     con = mv.getvariants(hgvs_list, fields='dbnsfp.cadd.phred,dbnsfp.genename')    
-
-    mv_df = json_normalize(con)
+    mv_df = pd.concat(map(json_normalize, con))
     mv_df.index = mv_df['_id']
     
-
     return mv_df
     
     
+
+
+def get_hgvs_id(non_ref_df, allele_call='a1'):
+    '''
+    This function returns hgvs formated strings for each variant
+    given a dataframe
+    '''
+    hgvs_id = 'chr' + non_ref_df['CHROM'].astype(str) + ":g." + non_ref_df['POS'].astype(str)  \
+                + non_ref_df['REF'] + '>' +  non_ref_df[allele_call]
+    return hgvs_id
 
 
 def get_myvariant_snp_annot(vcf_df_mv):
@@ -85,7 +92,6 @@ def get_myvariant_snp_annot(vcf_df_mv):
     '''
     
 
-    
  
     if 'CHROM' not in vcf_df_mv.columns:
         vcf_df_mv.reset_index(inplace=True)
@@ -94,19 +100,17 @@ def get_myvariant_snp_annot(vcf_df_mv):
     vcf_df_mv = vcf_df_mv[(vcf_df_mv['vartype1'] == 'snp') | (vcf_df_mv['vartype2'] == 'snp')] #restrict to snps
 
     non_ref_a1 = vcf_df_mv[vcf_df_mv['REF'] != vcf_df_mv['a1']][['CHROM', 'POS', 'REF', 'a1']]  #restrict a1 to non-reference alleles
-    hgvs_a1 = 'chr' + non_ref_a1['CHROM'].astype(str) + ":g." + non_ref_a1['POS'].astype(str)  \
-                                 + non_ref_a1['REF'] + '>' +  non_ref_a1['a1']
-
+    hgvs_a1 = get_hgvs_id(non_ref_a1, 'a1')
+    
     non_ref_a2 = vcf_df_mv[vcf_df_mv['REF'] != vcf_df_mv['a2']][['CHROM', 'POS', 'REF', 'a2']]  #restrict a2 to non-reference alleles
-    hgvs_a2 = 'chr' + non_ref_a2['CHROM'].astype(str) + ":g." + non_ref_a2['POS'].astype(str) \
-                                 + non_ref_a2['REF'] + '>' +  non_ref_a2['a2']
-
+    hgvs_a2 = get_hgvs_id(non_ref_a2, 'a2')
 
     hgvs_ids = set(hgvs_a1.values) | set(hgvs_a2.values)  #set of non-reference a1 and a2 snps
 
-    myvariant_results = map(myvariant_post, hgvs_ids)
+    myvariant_results = myvariant_post(list(hgvs_ids))
         
     return myvariant_results
+    
     
 
 
@@ -178,7 +182,7 @@ class fiSSEA(object):
         
         #Retrieving myvariant.info annotations for all snps
         myvariant_results = get_myvariant_snp_annot(self.vcf_df) #query and parse myvariant.info using all snps in self.vcf_df
-        self.mv_annot = pd.concat(myvariant_results)  #setting dataframe of parsed myvariant.info results
+        self.mv_annot = myvariant_results  #setting dataframe of parsed myvariant.info results
 
         #reducing size of dataframe for fiSSEA
         fiSSEA_cols = ['dbnsfp.genename', self.fiSSEA_score]
