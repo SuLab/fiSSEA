@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import multiprocessing as mp
 
-from variantAnnotations import *
+from variantAnnotations_multi import *
 from Vcf_metadata import *
 
 
