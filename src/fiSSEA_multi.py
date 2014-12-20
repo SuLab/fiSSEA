@@ -17,7 +17,8 @@ import cPickle, subprocess
 import multiprocessing as mp
 
 #fiSSEA Libraries
-sys.path.append('/Users/erickscott/git/pandasVCF/src/multi_sample/')
+#sys.path.append('/Users/erickscott/git/pandasVCF/src/multi_sample/')
+sys.path.append('../pandasVCF/src/multi_sample/')
 from pandasVCFmulti import *
 
 sys.path.append('../myvariant/src/')
@@ -65,10 +66,15 @@ def get_hgvs_id(non_ref_df, allele_call='a1'):
     This function returns hgvs formated strings for each variant
     given a dataframe
     '''
-    hgvs_id = 'chr' + non_ref_df['CHROM'].astype(str) + ":g." + non_ref_df['POS'].astype(str)  \
+    #non_ref_df['CHROM'] = non_ref_df['CHROM'].astype(str).str.replace('chr', '')
+    non_ref_df = non_ref_df[['CHROM', 'POS', 'REF', allele_call]].astype(str)
+    hgvs_id = 'chr' + non_ref_df['CHROM'] + ":g." + non_ref_df['POS']  \
                 + non_ref_df['REF'] + '>' +  non_ref_df[allele_call]
+                
+#     hgvs_id = 'chr' + non_ref_df['CHROM'] + ":g." + non_ref_df['POS']  \
+#                 + non_ref_df['REF'] + '>' +  non_ref_df[allele_call]
     return hgvs_id
-
+    
 
 def get_myvariant_snp_annot(vcf_df_mv):
     '''
@@ -91,7 +97,6 @@ def get_myvariant_snp_annot(vcf_df_mv):
     
     '''
     
-
  
     if 'CHROM' not in vcf_df_mv.columns:
         vcf_df_mv.reset_index(inplace=True)
@@ -137,8 +142,11 @@ class fiSSEA(object):
         #open Vcf object
         vcf_df_obj = Vcf(vcf_file_path, sample_id, cols=['#CHROM', 'POS', 'REF', 'ALT', 'FORMAT'], chunksize=chunksize, n_cores=n_cores)
 
-        #setting hgvs_list
-        self.hgvs_queries = []
+        #setting myvariant.info variant annotations
+        self.mv_df = pd.DataFrame()
+        
+        #setting vcf_df to archive variant annotations before gene collapsing
+        self.vcf_df = pd.DataFrame()
         
         res = []
         
@@ -152,7 +160,7 @@ class fiSSEA(object):
             
             
             vcf_df = vcf_df_obj.df[['a1', 'a2', 'vartype1', 'vartype2']]
-            self.vcf_df = vcf_df
+            
             
             #vcf_df = vcf_df.append(vcf_df_obj.df[['a1', 'a2', 'vartype1', 'vartype2']])
             #remove empty variant lines
@@ -165,22 +173,26 @@ class fiSSEA(object):
             #CREATE df to pass to myvariant.info
             vcf_df.reset_index(inplace=True)
             mv_df = vcf_df[['CHROM', 'POS', 'REF','a1', 'a2','vartype1', 'vartype2']]
-            mv_df.drop_duplicates(subset=['CHROM', 'POS', 'a1', 'a2'], inplace=True)
-            
+            mv_df = mv_df.drop_duplicates(subset=['CHROM', 'POS', 'a1', 'a2'])  
             
             #Retrieving myvariant.info annotations for all snps
             mv_df = get_myvariant_snp_annot(mv_df) #query and parse myvariant.info using all snps in self.vcf_df
-            
             #mv_df = pd.concat(myvariant_results)  #NOT NEEDED IF ONLY 1 DATAFRAME  #setting dataframe of parsed myvariant.info results
+            
             
             if 'dbnsfp.cadd.phred' not in mv_df.columns and 'dbnsfp.genename' not in mv_df.columns: break  #occurs when myvariant results empty
             
             mv_df = mv_df[['dbnsfp.cadd.phred','dbnsfp.genename']]  #removing unnecessary columns
             mv_df.dropna(inplace=True)  #removing useless annotations
             mv_df.index.name = 'hgvs_a1'  #renaming index, setting up for merging
-            mv_df.reset_index(inplace=True)  #setting up for merging on hgvs_a1
-            self.hgvs_queries.extend( list(mv_df['hgvs_a1'].values)  )  #saving hgvs queries
             
+            #Setting mv_df
+            self.mv_df = self.mv_df.append(mv_df)  #archiving myvariant.info annotations
+            
+            mv_df.reset_index(inplace=True)  #setting up for merging on hgvs_a1
+            #self.hgvs_queries.extend( list(mv_df['hgvs_a1'].values)  )  #saving hgvs queries
+            
+
             
             #Merging a1 cadd.phred scores and genename
             vcf_df['hgvs_a1'] = get_hgvs_id(vcf_df, 'a1')  #creating hgvs ids for a1 allele calls
@@ -191,11 +203,17 @@ class fiSSEA(object):
             
             vcf_df['hgvs_a2'] = get_hgvs_id(vcf_df, 'a2')  #creating hgvs ids for a2 allele calls
             mv_df.columns = ['hgvs_a2', 'dbnsfp.cadd.phred_a2', 'dbnsfp.genename']  #renaming myvariant df columns for merging a2
-            vcf_df = vcf_df.merge(mv_df[['hgvs_a2', 'dbnsfp.cadd.phred_a2']], how='left', on=['hgvs_a2'])  #merging cadd scores to master_df
+            vcf_df = vcf_df.merge(mv_df[['hgvs_a2', 'dbnsfp.cadd.phred_a2', 'dbnsfp.genename']], how='left', on=['hgvs_a2'], suffixes=['_a1', '_a2'])  #merging cadd scores to master_df
             vcf_df['dbnsfp.cadd.phred_a2'].fillna(value=0, inplace=True)  #filling empty columns with 0
             del vcf_df['hgvs_a2']  #removing hgvs_a2 column to save space
             
+            #FILLING GENENAMES FROM a_1 & a_2
+            vcf_df.fillna(value={'dbnsfp.genename_a1':vcf_df['dbnsfp.genename_a2']}, inplace=True)  #filling genenames from a1 and a2
+            vcf_df.rename(columns = {'dbnsfp.genename_a1':'dbnsfp.genename'}, inplace=True)  #renaming filled column
             vcf_df.dropna(subset=['dbnsfp.genename'], inplace=True)  #dropping variants without gene annotation
+            del vcf_df['dbnsfp.genename_a2']  #removing a2 genename
+            
+            
             
             
             #Splitting variants intersecting multiple genes into separate rows
@@ -211,27 +229,27 @@ class fiSSEA(object):
                 vcf_df = vcf_df.append(pd.DataFrame(vcf_df_multigene))
                 del vcf_df_multigene
             res.append(vcf_df)
-            stopiterating = vcf_df_obj.stopIteration
+            #stopiterating = vcf_df_obj.stopIteration
         
         
         vcf_df = pd.concat(res)
-        
-        
+        self.vcf_df = vcf_df
+          
         #CADD SCORES
+        
         vcf_df['cadd_score_sum'] = vcf_df['dbnsfp.cadd.phred_a1'] + vcf_df['dbnsfp.cadd.phred_a2']
-        fi_scores = vcf_df.pivot_table(index=['dbnsfp.genename'], columns='sample_ids', values='cadd_score_sum', aggfunc=self.gene_stat)
-        fi_scores.fillna(value=0, inplace=True)
+        if self.sample_id == 'all':  #Might break things 16 December 2014
+            fi_scores = vcf_df.pivot_table(index=['dbnsfp.genename'], columns='sample_ids', values='cadd_score_sum', aggfunc=self.gene_stat)
+            fi_scores.fillna(value=0, inplace=True)
+            #settting vcf_df as class object
+            self.fi_scores = fi_scores
         
-        
-        #settting vcf_df as class object
-        self.fi_scores = fi_scores
-    
-        
-        
-        
-        
-        #get myvariant.info annotations, create fiSSEA dataframe
-        #self.fiSSEA_status = self.get_fi_scores()
+        else:  #single sample vcf
+            fi_scores = vcf_df[['dbnsfp.genename', 'cadd_score_sum']]
+            self.fi_scores = fi_scores.groupby('dbnsfp.genename')['cadd_score_sum'].aggregate(self.gene_stat)
+            
+            
+
   
     
     def get_multigene_var_records(self, df_line):
@@ -282,12 +300,18 @@ class fiSSEA(object):
     
             Returns path to rnk file
             '''
+            self.single_sample_id = single_sample_id
+            if self.single_sample_id not in set(self.fi_scores.columns) and len(self.fi_scores.columns) !=1:
+                print 'single_sample_id not in fi_scores'
+                assert False
+                
+            if len(self.fi_scores.columns) > 1:
+                fiSSEA_results_write = self.fi_scores[[self.single_sample_id]]
+            else:
+                fiSSEA_results_write = pd.DataFrame(self.fi_scores)
+            fiSSEA_results_write.index.name = '#' + self.single_sample_id
     
-            fiSSEA_results_write = self.fi_scores[single_sample_id]
-            fiSSEA_results_write.name = '#' + single_sample_id + ',file:' + fiSSEA_results_write.name
-    
-    
-            rnk_path = self.rnk_write_dir + single_sample_id + '.rnk'
+            rnk_path = self.rnk_write_dir + self.single_sample_id + '.rnk'
             self.rnk_path = rnk_path
             
             if not os.path.exists(self.rnk_write_dir):
@@ -295,6 +319,7 @@ class fiSSEA(object):
             
             fiSSEA_results_write.to_csv(self.rnk_path, sep='\t')
             return True
+            
         
         
         
