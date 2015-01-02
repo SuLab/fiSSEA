@@ -233,7 +233,9 @@ class fiSSEA(object):
         
         
         vcf_df = pd.concat(res)
+        vcf_df.set_index(['CHROM', 'POS', 'REF', 'ALT'], inplace=True)
         self.vcf_df = vcf_df
+        
           
         #CADD SCORES
         
