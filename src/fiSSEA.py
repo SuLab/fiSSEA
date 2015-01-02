@@ -202,7 +202,7 @@ class fiSSEA(object):
             mv_annot_fiSSEA_multigene['index'] = mv_annot_fiSSEA_multigene.index
             mv_annot_fiSSEA_multigene.drop_duplicates(subset='index', inplace=True)
             mv_annot_fiSSEA_multigene = mv_annot_fiSSEA_multigene.apply(self.get_multigene_var_records, axis=1)
-            mv_annot_fiSSEA_multigene = [n for i in mv_annot_fiSSEA_multigene for n in i]
+            mv_annot_fiSSEA_multigene = [n for i in mv_annot_fiSSEA_multigene for n in i]  #flattening multigene results into multiple rows
             mv_annot_fiSSEA = mv_annot_fiSSEA.append(pd.DataFrame(mv_annot_fiSSEA_multigene))
             del mv_annot_fiSSEA_multigene
         
@@ -232,6 +232,10 @@ class fiSSEA(object):
             
             if not os.path.exists(self.rnk_write_dir):
                     os.makedirs(self.rnk_write_dir)
+                    
+            fiSSEA_results_write = fiSSEA_results_write[fiSSEA_results_write.astype(float) != 0.]
+        
+            fiSSEA_results_write.dropna(inplace=True)
             
             fiSSEA_results_write.to_csv(self.rnk_path, sep='\t')
             return True
