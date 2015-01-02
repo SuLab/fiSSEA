@@ -300,15 +300,20 @@ class fiSSEA(object):
     
             Returns path to rnk file
             '''
+        
             self.single_sample_id = single_sample_id
-            if self.single_sample_id not in set(self.fi_scores.columns) and len(self.fi_scores.columns) !=1:
+            
+            self.fi_scores = pd.DataFrame(self.fi_scores)  #Might break stuff 20 December 2014
+            
+            if len(self.fi_scores.columns) !=1 and self.single_sample_id not in set(self.fi_scores.columns):
                 print 'single_sample_id not in fi_scores'
                 assert False
                 
             if len(self.fi_scores.columns) > 1:
                 fiSSEA_results_write = self.fi_scores[[self.single_sample_id]]
             else:
-                fiSSEA_results_write = pd.DataFrame(self.fi_scores)
+                fiSSEA_results_write = self.fi_scores
+            
             fiSSEA_results_write.index.name = '#' + self.single_sample_id
     
             rnk_path = self.rnk_write_dir + self.single_sample_id + '.rnk'
@@ -316,6 +321,10 @@ class fiSSEA(object):
             
             if not os.path.exists(self.rnk_write_dir):
                     os.makedirs(self.rnk_write_dir)
+            
+            fiSSEA_results_write = fiSSEA_results_write[fiSSEA_results_write.astype(float) != 0.]  #dropping genes with no cadd score
+        
+            fiSSEA_results_write.dropna(inplace=True)  #dropping genes with no cadd score
             
             fiSSEA_results_write.to_csv(self.rnk_path, sep='\t')
             return True
