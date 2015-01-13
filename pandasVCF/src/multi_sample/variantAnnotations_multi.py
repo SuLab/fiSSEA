@@ -516,7 +516,7 @@ def mp_variant_annotations(df_mp, df_split_cols, df_sampleid, drop_hom_ref, n_co
     r = pool.map_async(process_variant_annotations, tasks, callback=results.append)
     r.wait()
     pool.close()
-    pool.join()
+    #pool.join()  #ToDo: fix, seems to fail from ZMQ error periodically
     return pd.concat(results[0])
 
 
