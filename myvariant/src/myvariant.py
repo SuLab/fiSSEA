@@ -5,7 +5,6 @@ Python Client for MyVariant.Info services
 from __future__ import print_function
 import sys
 import time
-import httplib2
 import requests
 import json
 try:
@@ -14,7 +13,7 @@ try:
 except:
     df_avail = False
 
-__version__ = '2.2.0'
+__version__ = '2.2.1'
 
 if sys.version_info[0] == 3:
     str_types = str
@@ -44,7 +43,6 @@ class MyVariantInfo():
         self.url = url
         if self.url[-1] == '/':
             self.url = self.url[:-1]
-        self.h = httplib2.Http()
         self.max_query = 1000
         # delay and step attributes are for batch queries.
         self.delay = 1
@@ -69,7 +67,7 @@ class MyVariantInfo():
     def _get(self, url, params={}):
         debug = params.pop('debug', False)
         return_raw = params.pop('return_raw', False)
-        headers = {'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % httplib2.__version__}
+        headers = {'user-agent': "Python-requests_myvariant.py/%s (gzip)" % requests.__version__}
         res = requests.get(url, params=params, headers=headers)
         #if debug:
         #    return _url, res, con
@@ -85,7 +83,7 @@ class MyVariantInfo():
         debug = params.pop('debug', False)
         return_raw = params.pop('return_raw', False)
         headers = {'content-type': 'application/x-www-form-urlencoded',
-                   'user-agent': "Python-httplib2_myvariant.py/%s (gzip)" % httplib2.__version__}
+                   'user-agent': "Python-requests_myvariant.py/%s (gzip)" % requests.__version__}
         res = requests.post(url, data=params, headers=headers)
         assert res.status_code == 200
         if return_raw:
